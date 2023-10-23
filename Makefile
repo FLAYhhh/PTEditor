@@ -1,4 +1,4 @@
-all: pteditor ptedit.o example header tests
+all: pteditor ptedit.o user_level_mmap example header tests
 
 header: module/pteditor.c module/pteditor.h ptedit.c ptedit.h
 	echo "#pragma once" > ptedit_header.h
@@ -10,6 +10,9 @@ pteditor: module/pteditor.c
 
 example: example.c header
 	gcc -Wall -Wextra example.c -g -o example
+
+user_level_mmap: user_level_mmap.c header
+	gcc -Wall -Wextra user_level_mmap.c -g -o user_level_mmap
 
 demos: header pteditor
 	cd demos && make
