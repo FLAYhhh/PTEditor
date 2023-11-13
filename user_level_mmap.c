@@ -5,6 +5,7 @@
 #include <memory.h>
 #include <unistd.h>
 #include <assert.h>
+#include <time.h>
 
 #define COLOR_RED     "\x1b[31m"
 #define COLOR_GREEN   "\x1b[32m"
@@ -18,18 +19,115 @@
 
 #include "ptedit_header.h"
 
-#define PAGESZ 4096
+#define PAGE_SIZE 4096
 
-// do micro benchmark:
+// do micro benchmark(both sequence access and random access):
 //   compare "direct read" vs "check and read" 
+//
 
-void micro_bench() {
-  void *va1;
-  posix_memalign(&va1, 4096, 4096);
-  memset
+#define ACCESS_TIME 100000
+void seq_direct_access(int access_mode) {
+
 }
 
-int main(int argc, char *argv[]) {
+void seq_check_then_access(int access_mode) {
+
+}
+
+void rand_direct_access(int access_mode) {
+
+}
+
+void rand_check_then_access(int access_mode) {
+
+}
+
+void *MEM_START;
+size_t MEM_SIZE = 4096 * ACCESS_TIME;
+/*
+ * memory region: [MEM_START, MEM_START + MEM_SIZE)
+ *
+ */
+void init_mem_region() {
+  int ret = posix_memalign(&MEM_START, 4096, MEM_SIZE);
+  assert(ret != NULL);
+}
+
+void init_pteditor() {
+  if(ptedit_init()) {
+    printf(TAG_FAIL "Could not initialize ptedit (did you load the kernel module?)\n");
+    return 1;
+  }
+
+  ptedit_use_implementation(PTEDIT_IMPL_USER);
+  assert(ptedit_get_pagesize()==4096);
+}
+
+/*
+ * intention: test performance when pages are loaded (direct read vs check-then-read).
+ * memory_allocation: pre allocate, all virtual address are valid
+ * access mode: 
+ * 	1. 100% read (seq and rand)
+ * 	2. 100% write (seq and rand)
+ * 	3. hybrid and random read & write (50% + 50%)
+ */
+void micro_benchmark() {
+  init_pteditor();
+  init_mem_region();
+
+  mbench_seq_read();
+  //mbench_seq_write();
+
+  //mbench_rand_read();
+  //mbench_rand_write();
+
+  //mbench_hybrid_rw();
+}
+
+/*
+ * seq read (read [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096] bytes)
+ * PS. now, only read first 8 bytes
+ * compare direct seq read vs check-then-read req read
+ */
+void mbench_seq_read() {
+  void *p = MEM_START;
+
+  clock_t start, end;
+  double cpu_time_used;
+
+  // direct read start
+  start = clock();
+  long long int out = 0;
+  for (p = MEM_START; p < MEM_START + MEM_SIZE; p+=PAGE_SIZE) {
+    out = *(long long int *)p; 
+  }
+  end = clock();
+  cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("Direct read time: %f\n", cpu_time_used);
+  // direct read end
+
+  // check-then-read start
+  start = clock();
+  for (p = MEM_START; p < MEM_START + MEM_SIZE; p+= PAGE_SIZE) {
+    //check
+    ptedit_entry_t address_ptes = ptedit_resolve(p, 0);
+    if (ptedit_pte_get_bit(p, 0, PTEDIT_PAGE_BIT_PRESENT) == 1) {
+      out = *(long long int *)p; 
+    } else {
+      assert(0);
+    }
+  }
+  end = clock();
+  cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("check-the-read time: %f\n", cpu_time_used);
+  // check-then_read end
+}
+int main() {
+  micro_benchmark();
+  return 0;
+}
+
+int unused_main(int argc, char *argv[]) {
   size_t address_pfn, target_pfn;
   (void)argc;
   (void)argv;
